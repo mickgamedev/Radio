@@ -1,0 +1,78 @@
+package ru.yandex.dunaev.mick.radio.database
+
+import android.content.Context
+import androidx.room.*
+import org.threeten.bp.LocalDateTime
+import ru.yandex.dunaev.mick.radio.models.*
+
+@Database(entities = arrayOf(
+    StationModel::class,
+    SyncResult::class,
+    Country::class,
+    Language::class,
+    Tag::class), version = 1, exportSchema = false)
+@TypeConverters(Converters::class)
+abstract class CatalogDatabase : RoomDatabase(){
+    abstract fun stationModelDao(): StationModelDao
+    abstract fun syncResultDao(): SyncResultDao
+    abstract fun additionalTables(): AdditionalTablesDao
+
+    companion object {
+        var oldSize = 0
+        var delete = 0
+        var newSize = 0
+        private var INSTANCE: CatalogDatabase? = null
+        fun getInstance() = INSTANCE!!
+        fun init(context: Context){
+            INSTANCE = Room.databaseBuilder(context, CatalogDatabase::class.java, "catalog.db").build()
+        }
+    }
+}
+
+fun CatalogDatabase.Companion.addStationsToCatalog(list: List<StationModel>) {
+    getInstance().stationModelDao().addStations(list)
+    newSize = list.size
+}
+
+fun CatalogDatabase.Companion.getAllStations() = getInstance().stationModelDao().getAllStations()
+
+fun CatalogDatabase.Companion.clearStationsSync() { oldSize = getInstance()
+    .stationModelDao().clearSync() }
+
+fun CatalogDatabase.Companion.deleteUnsync() { delete = getInstance()
+    .stationModelDao().deleteUnsync() }
+
+fun CatalogDatabase.Companion.clearAdditionalTables() = getInstance().additionalTables().clearAllTables()
+
+fun CatalogDatabase.Companion.addAdditionalTables(countries: List<Country>, languages: List<Language>, tags: List<Tag>)
+        = getInstance().additionalTables().addTables(countries, languages, tags)
+
+//fun CatalogDatabase.Companion.getSyncResult() = getInstance().syncResultDao().getSyncResult().subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread())
+
+fun CatalogDatabase.Companion.getAllCountries() = getInstance().additionalTables().getAllCountries()
+
+fun CatalogDatabase.Companion.getAllLanguages() = getInstance().additionalTables().getAllLanguages()
+
+fun CatalogDatabase.Companion.getAllTags() = getInstance().additionalTables().getAllTags()
+
+fun CatalogDatabase.Companion.saveSyncResult() {
+    val update = oldSize - delete
+    val insert = newSize - update
+    getInstance().syncResultDao().saveResult(
+        SyncResult(
+            1,
+            LocalDateTime.now(),
+            insert,
+            update,
+            delete
+        )
+    )
+}
+
+
+class Converters {
+    @TypeConverter
+    fun fromTimestamp(value: String?): LocalDateTime? = LocalDateTime.parse(value)
+    @TypeConverter
+    fun dateToTimestamp(date: LocalDateTime?): String? = date.toString()
+}
